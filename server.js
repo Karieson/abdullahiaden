@@ -1,0 +1,44 @@
+import express from "express";
+import jwt from "jsonwebtoken";
+import path from "path";
+import fs from "fs";
+import cors from "cors";
+
+const app = express();
+const PORT = 3000;
+const SECRET = "VERY_SECRET_KEY"; // change in production
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static("public"));
+
+// 🔐 Issue short-lived token
+app.get("/token", (req, res) => {
+  const token = jwt.sign({ access: "cert" }, SECRET, { expiresIn: "2m" });
+  res.json({ token });
+});
+
+// 🛡️ Middleware to verify token
+function verifyToken(req, res, next) {
+  const token = req.query.token;
+  if (!token) return res.status(401).send("Token required");
+
+  jwt.verify(token, SECRET, (err, decoded) => {
+    if (err) return res.status(403).send("Invalid or expired token");
+    next();
+  });
+}
+
+// 📄 Secure PDF endpoint
+app.get("/cert", verifyToken, (req, res) => {
+  const filePath = path.resolve("certs/my_certs.pdf");
+
+  if (!fs.existsSync(filePath)) return res.status(404).send("PDF not found");
+
+  res.setHeader("Content-Type", "application/pdf");
+  fs.createReadStream(filePath).pipe(res);
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
